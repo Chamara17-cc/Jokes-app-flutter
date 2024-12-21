@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:jork_app/SharedPreferences.dart';
+import 'dart:math';
+import '../SharedPreferences.dart';
 
 class JokesHomePage extends StatefulWidget {
   const JokesHomePage({Key? key}) : super(key: key);
@@ -13,39 +14,32 @@ class _JokesHomePageState extends State<JokesHomePage> {
   List<Map<String, String>> jokes = [];
   bool isLoading = false;
 
-  // Function to fetch a joke
   Future<void> fetchJoke() async {
     setState(() {
       isLoading = true;
     });
 
     try {
-      // Fetch a new joke from the API
-      final response =
-          await Dio().get('https://official-joke-api.appspot.com/random_joke');
-      final setup = response.data['setup'];
-      final punchline = response.data['punchline'];
+      final response = await Dio().get('https://official-joke-api.appspot.com/random_joke');
+      final setup = response.data['setup'].toString(); // Ensures String type
+      final punchline = response.data['punchline'].toString(); // Ensures String type
+      final Map<String, String> newJoke = {'setup': setup, 'punchline': punchline};
 
-      // Update UI with the fetched joke
       setState(() {
-        jokes.add({'setup': setup, 'punchline': punchline});
+        jokes.add(newJoke); // Directly add as Map<String, String>
       });
 
-      // Cache the fetched joke
-      await cacheJoke(setup, punchline);
+      final cachedJokes = await CacheHelper.getJokes();
+      cachedJokes.add(newJoke);
+      await CacheHelper.saveJokes(cachedJokes);
     } catch (e) {
-      // If fetching fails, check for cached data
-      String? cachedSetup = await CacheHelper.getData('setup');
-      String? cachedPunchline = await CacheHelper.getData('punchline');
-
-      if (cachedSetup != null && cachedPunchline != null) {
-        // Show cached joke if available
-        print('Loaded from cache: $cachedSetup - $cachedPunchline');
+      final cachedJokes = await CacheHelper.getJokes();
+      if (cachedJokes.isNotEmpty) {
+        final randomJoke = cachedJokes[Random().nextInt(cachedJokes.length)];
         setState(() {
-          jokes.add({'setup': cachedSetup, 'punchline': cachedPunchline});
+          jokes.add(randomJoke.map((key, value) => MapEntry(key, value.toString()))); // Ensure type
         });
       } else {
-        // Show error message if no cache or API fails
         setState(() {
           jokes.add({
             'setup': 'Error',
@@ -60,19 +54,21 @@ class _JokesHomePageState extends State<JokesHomePage> {
     }
   }
 
-  //Functon to cache the data
-  Future<void> cacheJoke(String setup, String punchline) async {
-    await CacheHelper.saveData('setup', setup);
-    await CacheHelper.saveData('punchline', punchline);
-  }
 
-  Future<void> fetchCachedJoke() async {
-    String? cachedSetup = await CacheHelper.getData('setup');
-    String? cachedPunchline = await CacheHelper.getData('punchline');
-    if (cachedSetup != null && cachedPunchline != null) {
-      print('Cached joke: $cachedSetup - $cachedPunchline');
+  Future<void> fetchRandomCachedJoke() async {
+    final cachedJokes = await CacheHelper.getJokes();
+    if (cachedJokes.isNotEmpty) {
+      final randomJoke = cachedJokes[Random().nextInt(cachedJokes.length)];
+      setState(() {
+        jokes.add(randomJoke);
+      });
     } else {
-      print('No joke in cache');
+      setState(() {
+        jokes.add({
+          'setup': 'No jokes available',
+          'punchline': 'Please fetch jokes online to store them for offline use.',
+        });
+      });
     }
   }
 
@@ -110,13 +106,13 @@ class _JokesHomePageState extends State<JokesHomePage> {
             onPressed: fetchJoke,
             child: isLoading
                 ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                color: Colors.white,
+                strokeWidth: 2,
+              ),
+            )
                 : const Text("Fetch Jokes"),
             style: ElevatedButton.styleFrom(
               foregroundColor: Colors.white,
@@ -129,11 +125,25 @@ class _JokesHomePageState extends State<JokesHomePage> {
             ),
           ),
           const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: fetchRandomCachedJoke,
+            child: const Text("Offline Jokes"),
+            style: ElevatedButton.styleFrom(
+              foregroundColor: Colors.white,
+              backgroundColor: Colors.orange,
+              shadowColor: Colors.black,
+              elevation: 10,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
           ...jokes.map((joke) => _buildJokeCard(
-                joke['setup']!,
-                joke['punchline']!,
-                Colors.blue[100]!,
-              )),
+            joke['setup']!,
+            joke['punchline']!,
+            Colors.blue[100]!,
+          )),
         ],
       ),
     );

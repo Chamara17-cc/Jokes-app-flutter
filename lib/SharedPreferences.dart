@@ -1,18 +1,25 @@
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CacheHelper {
-  static Future<void> saveData(String key, String value) async {
+  static Future<void> saveJokes(List<Map<String, String>> jokes) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(key, value);
+    final encodedJokes = jsonEncode(jokes);
+    await prefs.setString('jokes', encodedJokes);
   }
 
-  static Future<String?> getData(String key) async {
+  static Future<List<Map<String, String>>> getJokes() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(key);
+    final encodedJokes = prefs.getString('jokes');
+    if (encodedJokes != null) {
+      final decodedJokes = jsonDecode(encodedJokes) as List<dynamic>;
+      return decodedJokes.map((joke) => Map<String, String>.from(joke)).toList();
+    }
+    return [];
   }
 
-  static Future<void> clearData(String key) async {
+  static Future<void> clearJokes() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(key);
+    await prefs.remove('jokes');
   }
 }
